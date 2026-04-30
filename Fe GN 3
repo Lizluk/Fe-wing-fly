@@ -1,0 +1,226 @@
+-- Third Person View - Fixed (Hiện đầu và tóc)
+-- V = Bật/Tắt góc nhìn thứ ba
+-- B = Đổi khoảng cách camera
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local enabled = false
+local updateConn = nil
+local originalMaxZoom = nil
+local originalMinZoom = nil
+
+local ZOOM_DISTANCE = 15
+
+-- =============================================
+-- FORCE HIỆN ĐẦU VÀ TÓC
+-- =============================================
+local function showHead()
+    if not character then return end
+    
+    -- Tìm Head
+    local head = character:FindFirstChild("Head")
+    if head then
+        head.LocalTransparencyModifier = 0  -- Force hiện (0 = visible)
+        head.Transparency = 0
+    end
+    
+    -- Tìm tất cả accessories (tóc, mũ, kính, etc)
+    for _, obj in pairs(character:GetDescendants()) do
+        if obj:IsA("Accessory") or obj:IsA("Hat") then
+            -- Tìm Handle (part của accessory)
+            local handle = obj:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                handle.LocalTransparencyModifier = 0
+                handle.Transparency = 0
+            end
+        end
+        
+        -- Nếu là MeshPart/Part trong accessory
+        if obj:IsA("MeshPart") or obj:IsA("Part") then
+            -- Kiểm tra xem có phải part của Head không
+            if obj.Parent and (obj.Parent:IsA("Accessory") or obj.Parent.Name == "Head") then
+                obj.LocalTransparencyModifier = 0
+                if obj.Transparency > 0 and obj.Transparency < 1 then
+                    -- Giữ nguyên transparency nếu có (như kính trong suốt)
+                else
+                    obj.Transparency = 0
+                end
+            end
+        end
+    end
+end
+
+-- =============================================
+-- GUI
+-- =============================================
+local sg = Instance.new("ScreenGui")
+sg.Name = "ThirdPersonGui"
+sg.ResetOnSpawn = false
+sg.Parent = player:WaitForChild("PlayerGui")
+
+local lbl = Instance.new("TextLabel")
+lbl.Size = UDim2.new(0, 280, 0, 80)
+lbl.Position = UDim2.new(0, 10, 0.5, 380)
+lbl.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+lbl.BackgroundTransparency = 0.1
+lbl.BorderSizePixel = 0
+lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+lbl.TextSize = 20
+lbl.Font = Enum.Font.GothamBold
+lbl.TextWrapped = true
+lbl.Text = "[V] Third Person: OFF\n\nZoom: 15 studs\n[B] Change distance"
+lbl.Parent = sg
+
+Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 10)
+local stroke = Instance.new("UIStroke", lbl)
+stroke.Color = Color3.fromRGB(80, 80, 80)
+stroke.Thickness = 2
+
+-- =============================================
+-- BẬT THIRD PERSON
+-- =============================================
+local function enableThirdPerson()
+    enabled = true
+    
+    originalMaxZoom = player.CameraMaxZoomDistance
+    originalMinZoom = player.CameraMinZoomDistance
+    
+    player.CameraMaxZoomDistance = ZOOM_DISTANCE
+    player.CameraMinZoomDistance = ZOOM_DISTANCE
+    player.CameraMode = Enum.CameraMode.Classic
+    
+    local camera = workspace.CurrentCamera
+    if camera then
+        camera.CameraType = Enum.CameraType.Custom
+    end
+    
+    -- Force hiện Head ngay lập tức
+    showHead()
+    
+    -- Update liên tục
+    updateConn = RunService.Heartbeat:Connect(function()
+        if not enabled then return end
+        
+        -- Force camera settings
+        player.CameraMaxZoomDistance = ZOOM_DISTANCE
+        player.CameraMinZoomDistance = ZOOM_DISTANCE
+        player.CameraMode = Enum.CameraMode.Classic
+        
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        
+        -- QUAN TRỌNG: Force hiện Head mỗi frame
+        showHead()
+    end)
+    
+    lbl.Text = string.format("[V] Third Person: ON\n\nZoom: %d studs\n[B] Change distance", ZOOM_DISTANCE)
+    lbl.BackgroundColor3 = Color3.fromRGB(0, 0, 40)
+    stroke.Color = Color3.fromRGB(50, 150, 255)
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "👁️ Third Person ON",
+        Duration = 2,
+        Text = "Camera zoom: " .. ZOOM_DISTANCE .. " studs\nHead visible!",
+    })
+    
+    print("✅ Third Person View ENABLED (with head)")
+end
+
+-- =============================================
+-- TẮT
+-- =============================================
+local function disableThirdPerson()
+    enabled = false
+    
+    if updateConn then
+        updateConn:Disconnect()
+        updateConn = nil
+    end
+    
+    if originalMaxZoom then
+        player.CameraMaxZoomDistance = originalMaxZoom
+    end
+    if originalMinZoom then
+        player.CameraMinZoomDistance = originalMinZoom
+    end
+    
+    lbl.Text = string.format("[V] Third Person: OFF\n\nZoom: %d studs\n[B] Change distance", ZOOM_DISTANCE)
+    lbl.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    stroke.Color = Color3.fromRGB(80, 80, 80)
+    
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "✅ Default View",
+        Duration = 2,
+        Text = "Camera back to normal",
+    })
+    
+    print("❌ Third Person View DISABLED")
+end
+
+-- =============================================
+-- INPUT
+-- =============================================
+UserInputService.InputBegan:Connect(function(input, chat)
+    if chat then return end
+    
+    if input.KeyCode == Enum.KeyCode.V then
+        if not enabled then
+            enableThirdPerson()
+        else
+            disableThirdPerson()
+        end
+    end
+    
+    if input.KeyCode == Enum.KeyCode.B then
+        ZOOM_DISTANCE = ZOOM_DISTANCE + 5
+        if ZOOM_DISTANCE > 50 then
+            ZOOM_DISTANCE = 5
+        end
+        
+        if enabled then
+            player.CameraMaxZoomDistance = ZOOM_DISTANCE
+            player.CameraMinZoomDistance = ZOOM_DISTANCE
+            lbl.Text = string.format("[V] Third Person: ON\n\nZoom: %d studs\n[B] Change distance", ZOOM_DISTANCE)
+        else
+            lbl.Text = string.format("[V] Third Person: OFF\n\nZoom: %d studs\n[B] Change distance", ZOOM_DISTANCE)
+        end
+        
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "📏 Zoom Changed",
+            Duration = 1.5,
+            Text = "Distance: " .. ZOOM_DISTANCE .. " studs",
+        })
+    end
+end)
+
+-- =============================================
+-- RESPAWN
+-- =============================================
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = character:WaitForChild("Humanoid")
+    
+    if enabled then
+        task.wait(1)
+        enableThirdPerson()
+    end
+end)
+
+-- Init
+print("=== Third Person View (Fixed - With Head) ===")
+print("[V] Toggle | [B] Change zoom")
+print("Head and hair will be visible!")
+
+game.StarterGui:SetCore("SendNotification", {
+    Title = "👁️ Third Person Ready",
+    Duration = 3,
+    Text = "[V] Toggle | [B] Zoom\nHead visible fix included!",
+})
