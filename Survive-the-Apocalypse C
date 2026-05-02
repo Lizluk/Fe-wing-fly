@@ -1,0 +1,179 @@
+-- CHIBAKU TENSEI: PLAYER DELIVERY SYSTEM
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local client = Players.LocalPlayer
+
+local FILE_NAME = "MagnetStation_Data.json"
+local inversionEnabled = false
+local capturedParts = {}
+local savedStations = {} 
+local currentTargetPos = nil 
+local targetPlayer = nil -- Biến lưu mục tiêu là người chơi
+
+-- 1. DUY TRÌ QUYỀN SỞ HỮU (XỬ LÝ KHOẢNG CÁCH XA)
+local function claimOwnership(part)
+    pcall(function()
+        if sethiddenproperty then
+            sethiddenproperty(client, "SimulationRadius", 1e308)
+            sethiddenproperty(client, "MaxSimulationRadius", 1e308)
+        end
+        part.Velocity = Vector3.new(0, 0.05, 0)
+    end)
+end
+
+-- 2. QUẢN LÝ DỮ LIỆU FILE
+local function saveToFile()
+    writefile(FILE_NAME, HttpService:JSONEncode(savedStations))
+end
+
+local function loadFromFile()
+    if isfile(FILE_NAME) then
+        pcall(function() savedStations = HttpService:JSONDecode(readfile(FILE_NAME)) end)
+    end
+end
+loadFromFile()
+
+-- 3. GIAO DIỆN (UI)
+local screenGui = client:WaitForChild("PlayerGui"):FindFirstChild("MagnetUI") or Instance.new("ScreenGui", client.PlayerGui)
+screenGui.Name = "MagnetUI"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 300, 0, 350), UDim2.new(0, 10, 0.5, -175)
+mainFrame.BackgroundColor3, mainFrame.Draggable, mainFrame.Active = Color3.fromRGB(15, 15, 15), true, true
+
+local label = Instance.new("TextLabel", mainFrame)
+label.Size, label.Text, label.TextColor3 = UDim2.new(1, 0, 0, 40), "(G) Magnet: OFF", Color3.new(1, 0, 0)
+label.BackgroundTransparency, label.TextSize = 1, 18
+
+-- Tạo Container cho 2 danh sách
+local listContainer = Instance.new("Frame", mainFrame)
+listContainer.Size, listContainer.Position = UDim2.new(1, -10, 1, -140), UDim2.new(0, 5, 0, 45)
+listContainer.BackgroundTransparency = 1
+
+local stationScroll = Instance.new("ScrollingFrame", listContainer)
+stationScroll.Size, stationScroll.Position = UDim2.new(0.5, -2, 1, 0), UDim2.new(0, 0, 0, 0)
+stationScroll.BackgroundColor3, stationScroll.CanvasSize = Color3.fromRGB(25, 25, 25), UDim2.new(0, 0, 5, 0)
+Instance.new("UIListLayout", stationScroll).Padding = UDim.new(0, 2)
+
+local playerScroll = Instance.new("ScrollingFrame", listContainer)
+playerScroll.Size, playerScroll.Position = UDim2.new(0.5, -2, 1, 0), UDim2.new(0.5, 2, 0, 0)
+playerScroll.BackgroundColor3, playerScroll.CanvasSize = Color3.fromRGB(25, 25, 25), UDim2.new(0, 0, 5, 0)
+Instance.new("UIListLayout", playerScroll).Padding = UDim.new(0, 2)
+
+-- Cập nhật danh sách người chơi
+local function updatePlayerUI()
+    for _, v in pairs(playerScroll:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, p in pairs(Players:GetPlayers()) do
+        local btn = Instance.new("TextButton", playerScroll)
+        btn.Size, btn.Text = UDim2.new(1, -5, 0, 25), p.DisplayName
+        btn.BackgroundColor3 = (targetPlayer == p) and Color3.fromRGB(80, 80, 30) or Color3.fromRGB(40, 40, 40)
+        btn.TextColor3, btn.TextSize = Color3.new(1, 1, 1), 12
+        btn.MouseButton1Click:Connect(function()
+            targetPlayer = p
+            currentTargetPos = nil
+            print("Đang giao đồ tới: " .. p.Name)
+            updatePlayerUI()
+        end)
+    end
+end
+
+-- Cập nhật danh sách Station
+local function updateStationUI()
+    for _, v in pairs(stationScroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+    
+    local fBtn = Instance.new("TextButton", stationScroll)
+    fBtn.Size, fBtn.Text, fBtn.BackgroundColor3 = UDim2.new(1, -5, 0, 30), "Follow Me", Color3.fromRGB(30, 50, 30)
+    fBtn.TextColor3 = Color3.new(1, 1, 1)
+    fBtn.MouseButton1Click:Connect(function() targetPlayer = nil; currentTargetPos = nil; updatePlayerUI() end)
+
+    for i, pos in pairs(savedStations) do
+        local entry = Instance.new("Frame", stationScroll)
+        entry.Size, entry.BackgroundTransparency = UDim2.new(1, -5, 0, 30), 1
+        local sBtn = Instance.new("TextButton", entry)
+        sBtn.Size, sBtn.Text = UDim2.new(0.75, 0, 1, 0), "Pos "..i
+        sBtn.BackgroundColor3, sBtn.TextColor3 = Color3.fromRGB(45, 45, 45), Color3.new(1, 1, 1)
+        sBtn.MouseButton1Click:Connect(function() targetPlayer = nil; currentTargetPos = Vector3.new(pos.x, pos.y, pos.z); updatePlayerUI() end)
+        local dBtn = Instance.new("TextButton", entry)
+        dBtn.Size, dBtn.Position, dBtn.Text = UDim2.new(0.25, 0, 1, 0), UDim2.new(0.75, 0, 0, 0), "X"
+        dBtn.BackgroundColor3, dBtn.TextColor3 = Color3.fromRGB(80, 20, 20), Color3.new(1, 1, 1)
+        dBtn.MouseButton1Click:Connect(function() table.remove(savedStations, i); saveToFile(); updateStationUI() end)
+    end
+end
+
+local saveBtn = Instance.new("TextButton", mainFrame)
+saveBtn.Size, saveBtn.Position = UDim2.new(1, -10, 0, 40), UDim2.new(0, 5, 1, -85)
+saveBtn.Text, saveBtn.BackgroundColor3 = "SAVE MY POSITION", Color3.fromRGB(30, 30, 70)
+saveBtn.TextColor3 = Color3.new(1, 1, 1)
+saveBtn.MouseButton1Click:Connect(function()
+    local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+    if rp then table.insert(savedStations, {x = rp.Position.X, y = rp.Position.Y, z = rp.Position.Z}); saveToFile(); updateStationUI() end
+end)
+
+Players.PlayerAdded:Connect(updatePlayerUI)
+Players.PlayerRemoving:Connect(updatePlayerUI)
+updateStationUI()
+updatePlayerUI()
+
+-- 4. LOGIC HÚT ĐỒ (SMOOTH CINEMATIC)[cite: 4]
+local function applyMagnet(part)
+    if not part:IsA("BasePart") or part.Anchored or capturedParts[part] then return end
+    capturedParts[part] = true
+    
+    local attPart = Instance.new("Attachment", part)
+    local attTarget = Instance.new("Attachment", workspace.Terrain)
+    local ap = Instance.new("AlignPosition", part)
+    ap.Attachment0, ap.Attachment1 = attPart, attTarget
+    ap.MaxForce, ap.MaxVelocity, ap.Responsiveness = 20000000, 30, 5
+    ap.Mode = Enum.PositionAlignmentMode.TwoAttachment
+    
+    task.spawn(function()
+        local lastClaim = 0
+        while inversionEnabled and part and part.Parent do
+            local finalPos = nil
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                finalPos = targetPlayer.Character.HumanoidRootPart.Position + Vector3.new(0, 5, 0)
+            elseif currentTargetPos then
+                finalPos = currentTargetPos
+            else
+                local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
+                finalPos = rp and (rp.CFrame * CFrame.new(0, 12, -5)).Position
+            end
+
+            if finalPos then
+                attTarget.WorldPosition = finalPos
+                local dist = (finalPos - part.Position).Magnitude
+                ap.Responsiveness = (dist < 10) and 100 or 5
+                if dist < 10 then part.Velocity = part.Velocity * 0.7 end
+                if tick() - lastClaim > 0.5 then claimOwnership(part); lastClaim = tick() end
+                part.CanCollide = false
+            end
+            RunService.Heartbeat:Wait()
+        end
+        if ap then ap:Destroy() end
+        if attPart then attPart:Destroy() end
+        if attTarget then attTarget:Destroy() end
+        part.CanCollide = true
+        capturedParts[part] = nil
+    end)
+end
+
+-- 5. ĐIỀU KHIỂN
+local function toggle()
+    inversionEnabled = not inversionEnabled
+    label.Text = inversionEnabled and "(C) Magnet: ON" or "(C) Magnet: OFF"
+    label.TextColor3 = inversionEnabled and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+    if inversionEnabled then
+        local folder = workspace:FindFirstChild("DroppedItems")
+        if folder then for _, v in pairs(folder:GetDescendants()) do applyMagnet(v) end end
+    end
+end
+
+local folder = workspace:FindFirstChild("DroppedItems")
+if folder then
+    folder.DescendantAdded:Connect(function(v) if inversionEnabled then task.wait(0.2) applyMagnet(v) end end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe) if not gpe and input.KeyCode == Enum.KeyCode.C then toggle() end end)
