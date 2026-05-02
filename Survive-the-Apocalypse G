@@ -1,4 +1,4 @@
--- CHIBAKU TENSEI: CINEMATIC EDITION (SLOW & SMOOTH)
+-- CHIBAKU TENSEI: SMOOTH LANDING & STATIC HOLD
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,18 +11,18 @@ local capturedParts = {}
 local savedStations = {} 
 local currentTargetPos = nil 
 
--- 1. DUY TRÌ QUYỀN SỞ HỮU (GIỮ KẾT NỐI VẬT LÝ)
-local function forceActive(part)
+-- 1. HÀM DUY TRÌ QUYỀN KIỂM SOÁT (XỬ LÝ KHOẢNG CÁCH XA)
+local function claimOwnership(part)
     pcall(function()
         if sethiddenproperty then
             sethiddenproperty(client, "SimulationRadius", 1e308)
             sethiddenproperty(client, "MaxSimulationRadius", 1e308)
         end
-        part.Velocity = Vector3.new(0, 0.01, 0)
+        part.Velocity = Vector3.new(0, 0.05, 0)
     end)
 end
 
--- 2. QUẢN LÝ FILE
+-- 2. HÀM LƯU/TẢI FILE
 local function saveToFile()
     writefile(FILE_NAME, HttpService:JSONEncode(savedStations))
 end
@@ -34,14 +34,14 @@ local function loadFromFile()
 end
 loadFromFile()
 
--- 3. GIAO DIỆN (UI)
+-- 3. GIAO DIỆN (GIỮ NGUYÊN TÍNH NĂNG XÓA)
 local screenGui = client:WaitForChild("PlayerGui"):FindFirstChild("MagnetUI") or Instance.new("ScreenGui", client.PlayerGui)
 screenGui.Name = "MagnetUI"
 screenGui.ResetOnSpawn = false
 
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size, mainFrame.Position = UDim2.new(0, 280, 0, 300), UDim2.new(0, 10, 0.5, -150)
-mainFrame.BackgroundColor3, mainFrame.Draggable, mainFrame.Active = Color3.fromRGB(10, 10, 10), true, true
+mainFrame.BackgroundColor3, mainFrame.Draggable, mainFrame.Active = Color3.fromRGB(20, 20, 20), true, true
 
 local label = Instance.new("TextLabel", mainFrame)
 label.Size, label.Text, label.TextColor3 = UDim2.new(1, 0, 0, 40), "(G) Magnet: OFF", Color3.new(1, 0, 0)
@@ -49,7 +49,7 @@ label.BackgroundTransparency, label.TextSize = 1, 18
 
 local scroll = Instance.new("ScrollingFrame", mainFrame)
 scroll.Size, scroll.Position = UDim2.new(1, -10, 1, -100), UDim2.new(0, 5, 0, 45)
-scroll.BackgroundColor3, scroll.CanvasSize = Color3.fromRGB(20, 20, 20), UDim2.new(0, 0, 10, 0)
+scroll.BackgroundColor3, scroll.CanvasSize = Color3.fromRGB(30, 30, 30), UDim2.new(0, 0, 10, 0)
 Instance.new("UIListLayout", scroll).Padding = UDim.new(0, 5)
 
 local function updateUI()
@@ -58,7 +58,7 @@ local function updateUI()
     local fFrame = Instance.new("Frame", scroll)
     fFrame.Size, fFrame.BackgroundTransparency = UDim2.new(1, -5, 0, 35), 1
     local fBtn = Instance.new("TextButton", fFrame)
-    fBtn.Size, fBtn.Text, fBtn.BackgroundColor3 = UDim2.new(1, 0, 1, 0), "Follow Me", Color3.fromRGB(30, 50, 30)
+    fBtn.Size, fBtn.Text, fBtn.BackgroundColor3 = UDim2.new(1, 0, 1, 0), "Follow Me (Default)", Color3.fromRGB(45, 65, 45)
     fBtn.TextColor3 = Color3.new(1, 1, 1)
     fBtn.MouseButton1Click:Connect(function() currentTargetPos = nil end)
 
@@ -68,19 +68,19 @@ local function updateUI()
         
         local sBtn = Instance.new("TextButton", entry)
         sBtn.Size, sBtn.Position, sBtn.Text = UDim2.new(0.8, -5, 1, 0), UDim2.new(0,0,0,0), "Station "..i
-        sBtn.BackgroundColor3, sBtn.TextColor3 = Color3.fromRGB(40, 40, 40), Color3.new(1, 1, 1)
+        sBtn.BackgroundColor3, sBtn.TextColor3 = Color3.fromRGB(50, 50, 50), Color3.new(1, 1, 1)
         sBtn.MouseButton1Click:Connect(function() currentTargetPos = Vector3.new(pos.x, pos.y, pos.z) end)
         
         local dBtn = Instance.new("TextButton", entry)
         dBtn.Size, dBtn.Position, dBtn.Text = UDim2.new(0.2, 0, 1, 0), UDim2.new(0.8, 0, 0, 0), "X"
-        dBtn.BackgroundColor3, dBtn.TextColor3 = Color3.fromRGB(80, 20, 20), Color3.new(1, 1, 1)
+        dBtn.BackgroundColor3, dBtn.TextColor3 = Color3.fromRGB(110, 35, 35), Color3.new(1, 1, 1)
         dBtn.MouseButton1Click:Connect(function() table.remove(savedStations, i) saveToFile() updateUI() end)
     end
 end
 
 local saveBtn = Instance.new("TextButton", mainFrame)
 saveBtn.Size, saveBtn.Position = UDim2.new(1, -10, 0, 40), UDim2.new(0, 5, 1, -45)
-saveBtn.Text, saveBtn.BackgroundColor3 = "SAVE POSITION", Color3.fromRGB(20, 20, 50)
+saveBtn.Text, saveBtn.BackgroundColor3 = "SAVE POSITION", Color3.fromRGB(35, 35, 75)
 saveBtn.TextColor3 = Color3.new(1, 1, 1)
 saveBtn.MouseButton1Click:Connect(function()
     local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
@@ -91,26 +91,24 @@ saveBtn.MouseButton1Click:Connect(function()
 end)
 updateUI()
 
--- 4. LOGIC BAY CHẬM NGHỆ THUẬT
-local function applyCinematicMagnet(part)
+-- 4. CƠ CHẾ HÚT MƯỢT MÀ & GIỮ CỐ ĐỊNH (ANTI-OVERSHOOT)
+local function applySmoothMagnet(part)
     if not part:IsA("BasePart") or part.Anchored or capturedParts[part] then return end
     capturedParts[part] = true
+    claimOwnership(part)
 
+    -- Sử dụng AlignPosition để kiểm soát vị trí chính xác hơn LinearVelocity
     local attPart = Instance.new("Attachment", part)
-    local attTarget = Instance.new("Attachment", workspace.Terrain) 
+    local attTarget = Instance.new("Attachment", workspace.Terrain) -- Attachment tạm trên thế giới
     
     local ap = Instance.new("AlignPosition", part)
     ap.Attachment0 = attPart
     ap.Attachment1 = attTarget
-    ap.MaxForce = 15000000 
-    
-    -- THÔNG SỐ QUYẾT ĐỊNH ĐỘ NGẦU:
-    ap.MaxVelocity = 25 -- Giới hạn tốc độ bay tối đa (thấp cho ngầu)
-    ap.Responsiveness = 3 -- Độ nhạy cực thấp để đồ vật bay lững lờ
+    ap.MaxForce = 10000000 
+    ap.Responsiveness = 15 -- Độ nhạy (thấp hơn giúp bay mượt hơn, không bị giật)
     ap.Mode = Enum.PositionAlignmentMode.TwoAttachment
     
     task.spawn(function()
-        local lastClaim = 0
         while inversionEnabled and part and part.Parent do
             local rp = client.Character and client.Character:FindFirstChild("HumanoidRootPart")
             local finalTarget = currentTargetPos or (rp and (rp.CFrame * CFrame.new(0, 15, -5)).Position)
@@ -119,23 +117,16 @@ local function applyCinematicMagnet(part)
                 attTarget.WorldPosition = finalTarget
                 local dist = (finalTarget - part.Position).Magnitude
                 
-                -- Điều chỉnh thông số khi gần đến đích để gom lại đẹp hơn
-                if dist < 5 then
-                    ap.MaxVelocity = 10 -- Chậm hẳn lại khi chuẩn bị hạ cánh
-                    ap.Responsiveness = 50 -- Khóa chặt vị trí
-                    part.Velocity = part.Velocity * 0.8
+                -- Tự động điều chỉnh độ mượt dựa trên khoảng cách (Phanh từ từ khi đến gần)
+                if dist < 10 then
+                    ap.Responsiveness = 200 -- "Khóa chặt" khi đã đến nơi
+                    part.Velocity = part.Velocity * 0.5 -- Hãm lực quán tính[cite: 2]
                 else
-                    ap.MaxVelocity = 25 -- Tốc độ bay đường trường
-                    ap.Responsiveness = 3
-                end
-                
-                -- Đánh thức vật lý liên tục để không bị dừng
-                if tick() - lastClaim > 0.4 then
-                    forceActive(part)
-                    lastClaim = tick()
+                    ap.Responsiveness = 10 -- Bay từ từ khi ở xa để không bị văng[cite: 2]
                 end
                 
                 part.CanCollide = false
+                claimOwnership(part)
             end
             RunService.Heartbeat:Wait()
         end
@@ -147,21 +138,21 @@ local function applyCinematicMagnet(part)
     end)
 end
 
--- 5. ĐIỀU KHIỂN
+-- 5. ĐIỀU KHIỂN BẬT/TẮT
 local function toggle()
     inversionEnabled = not inversionEnabled
     label.Text = inversionEnabled and "(G) Magnet: ON" or "(G) Magnet: OFF"
     label.TextColor3 = inversionEnabled and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
     if inversionEnabled then
         local folder = workspace:FindFirstChild("DroppedItems")
-        if folder then for _, v in pairs(folder:GetDescendants()) do applyCinematicMagnet(v) end end
+        if folder then for _, v in pairs(folder:GetDescendants()) do applySmoothMagnet(v) end end
     end
 end
 
 local folder = workspace:FindFirstChild("DroppedItems")
 if folder then
     folder.DescendantAdded:Connect(function(v)
-        if inversionEnabled then task.wait(0.2) applyCinematicMagnet(v) end
+        if inversionEnabled then task.wait(0.2) applySmoothMagnet(v) end
     end)
 end
 
